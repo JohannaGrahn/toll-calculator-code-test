@@ -31,3 +31,111 @@ You can make any modifications or suggestions for modifications that you see fit
 ## Help I dont know C# or Java
 No worries! We accept submissions in other languages as well, why not try it in Go or nodejs.
 
+## TypeScript solution notes
+
+### Setup
+
+The new implementation lives in `Toll-Calculator/` and is written in TypeScript.
+
+```bash
+cd Toll-Calculator
+npm install
+```
+
+The solution uses `date-holidays` package for Swedish public holiday lookup instead of maintaining a hard-coded holiday table. The package is algorithm based and maintained so it should hold for holidays every year, which is also the assumption the solution builds upon.
+
+### Running the console calculator
+
+Start the interactive console calculator:
+
+```bash
+npm run dev
+```
+
+You will be prompted for:
+
+* A vehicle type: `Car`, `Motorbike`, `Tractor`, `Emergency`, `Diplomat`, `Foreign`, `Military`
+* One or several pass dates, separated by commas
+
+Example input:
+
+```text
+Vehicle (Car, Motorbike, Tractor, Emergency, Diplomat, Foreign, Military): Car
+Pass dates, comma-separated (example: 2026-01-14T06:15:00, 2026-01-14T07:15:00): 2026-01-14T06:15:00, 2026-01-14T07:15:00
+Total toll fee for Car: 18 SEK
+Calculate another toll? (yes/no): no
+```
+
+Dates must be valid date strings that JavaScript can parse. All dates in one calculation must be from the same calendar day, because the daily cap applies per day.
+Vehicles must be of the VehicleType, but is not case sensitive.
+
+Build the TypeScript project:
+
+```bash
+npm run build
+```
+
+Run the compiled JavaScript after building:
+
+```bash
+npm start
+```
+
+### Running the tests
+
+Run the full test suite once:
+
+```bash
+npm run test:run
+```
+
+Run tests in watch mode:
+
+```bash
+npm test
+```
+
+### Bugs found in the original Java code
+
+While reviewing `Java/TollCalculator.java`, these bugs and risks were identified:
+
+* Empty or null dates were not checked properly and could cause crashes
+* Dates were assumed to be sorted.
+* The 60 minute rule was calculated from the first pass only, and the interval start is not updated for later windows.
+* Several passes inside one 60-minute window can be overcharged because the code subtracts the first pass fee instead of the fee already counted for that interval.
+* Dates from multiple days can be passed together and capped as one day, which can undercharge.
+* The `09:00-14:29` interval falls through to `0` because the Java condition only covers `xx:30-xx:59` for hours 8-14.
+* Vehicle type matching can throw if `getType()` returns null.
+* Holiday handling is hard-coded to 2013.
+* Potential bug could also be the handling of time zones, but this solution assumes the system will only be used in the city mentioned in the background part of the README.
+
+### My solution
+
+The TypeScript implementation was built with a TDD approach: tests were added around the expected toll rules, then the implementation was changed until the behavior matched the requirements.
+
+The solution now covers:
+
+* The fee table as a config array in `src/fees.ts`.
+* The daily maximum fee of 60 SEK.
+* The single-charge rule: within a 60-minute window, only the highest fee is charged.
+* Sorting pass dates before calculation.
+* Rejecting invalid dates and malformed runtime input.
+* Rejecting dates from different calendar days.
+* Typed validation errors with stable error codes for easier API handling.
+* Toll-free vehicle types.
+* Toll-free weekends.
+* Swedish public holidays and days before Swedish public holidays via `date-holidays`.
+* Keeping the July exception, making July toll-free as well.
+* An interactive console entry point in `src/index.ts` for calculating tolls from user-provided vehicle and pass dates.
+
+The tests are split accordingly:
+
+* `test/fees.test.ts` checks the fee schedule and single-pass exemptions.
+* `test/calculator.test.ts` checks daily totals, the 60-minute rule, the daily cap, sorting and validation of invalid or non-date input.
+* `test/holidays.test.ts` checks weekends, July, Swedish holidays and regular weekdays across several years.
+* `test/vehicles.test.ts` checks toll-free and regular vehicle handling.
+
+### Potential improvements
+
+* Move the fee schedule out of the source code and load it from configuration. The current TypeScript solution already represents the time intervals as a table in `src/fees.ts`, but it is still hard-coded into the application. A future version could load the intervals, amounts and daily maximum from JSON, a database or another configuration source so rule changes do not require a code change.
+* Add more tests around `date-holidays` so package updates do not unexpectedly change toll-free dates.
